@@ -16,6 +16,21 @@ const browser_queued = new prom.Gauge({
   help: "正在排队数量",
 });
 
+const browser_max_concurrent = new prom.Gauge({
+  name: "browser_max_concurrent",
+  help: "浏览器预设最大并发数量",
+});
+
+const browser_max_queued = new prom.Gauge({
+  name: "browser_max_queued",
+  help: "浏览器预设最大排队数量",
+});
+
+const browser_queued_utilization = new prom.Gauge({
+  name: "browser_queued_utilization",
+  help: "浏览器排队率",
+});
+
 const browser_concurrent_utilization = new prom.Gauge({
   name: "browser_concurrent_utilization",
   help: "浏览器并发利用率",
@@ -58,8 +73,16 @@ async function getWorkerPressure(browserEntry) {
 
     browser_queued.set(pressure.queued);
 
+    browser_max_concurrent.set(pressure.maxConcurrent);
+
+    browser_max_queued.set(pressure.maxQueued);
+
     browser_concurrent_utilization.set(
       _.floor((pressure.running * 100) / pressure.maxConcurrent, 2)
+    );
+
+    browser_queued_utilization.set(
+      _.floor((pressure.queued * 100) / pressure.maxQueued, 2)
     );
   } catch (err) {
     const loggerWithChild = logger.child({ browserPressureEntry, err });
