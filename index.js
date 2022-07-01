@@ -2,7 +2,6 @@ require("dotenv").config();
 const express = require("express");
 const prom = require("prom-client");
 const axios = require("axios");
-const os = require("os");
 const logger = require("pino")();
 const _ = require("lodash");
 
@@ -25,72 +24,33 @@ const browser_concurrent_utilization = new prom.Gauge({
 const app = express();
 
 // 获取环境变量
-const { PORT, BROWSERLESS_HOST, BROWSERLESS_PORT, BROWSERLESS_API_TOKEN } =
-  process.env;
+const { PORT, BROWSER_URL, BROWSER_TOKEN } = process.env;
 
-// 获取本机 ip 地址
-const getLocalIp = () => {
-  const ifaces = os.networkInterfaces();
-  const ips = [];
-  Object.keys(ifaces).forEach((ifname) => {
-    ifaces[ifname].forEach((iface) => {
-      if (iface.family === "IPv4" && !iface.internal) {
-        ips.push(iface.address);
-      }
-    });
-  });
-
-  const [localIp] = ips;
-
-  if (!localIp) {
-    logger.error({ ips }, "未获取到本机 ip 地址");
-    throw new Error("未找到本机 ip 地址");
+// 获取 browser 压力入口地址
+const getBrowserPressureEntry = () => {
+  // 检查是否配置了 BROWSER_URL 环境变量
+  if (!BROWSER_URL) {
+    throw new Error("未配置 BROWSER_URL 环境变量");
   }
 
-  return localIp;
-};
+  const url = new URL(BROWSER_URL);
 
-// 获取 browserless host
-const getBrowserlessHost = () => {
-  let browserlessHost = BROWSERLESS_HOST;
+  url.pathname = "/pressure";
 
-  if (!BROWSERLESS_HOST) {
-    logger.warn("未配置 BROWSERLESS_HOST 环境变量，将使用本机 ip 地址");
-    browserlessHost = getLocalIp();
-  }
-
-  return browserlessHost;
-};
-
-// 获取 browserless 入口地址
-const getBrowserlessEntry = (
-  // 额外的路径参数
-  extraPath = ""
-) => {
-  // 检查是否配置了 BROWSERLESS_PORT 环境变量
-  if (!BROWSERLESS_PORT) {
-    logger.error("未配置 BROWSERLESS_PORT 环境变量");
-    throw new Error("未配置 BROWSERLESS_PORT 环境变量");
-  }
-
-  const browserlessHost = getBrowserlessHost();
-
-  let token = "";
-
-  // 检查是否配置了 BROWSERLESS_API_TOKEN 环境变量
-  if (!BROWSERLESS_API_TOKEN) {
-    logger.warn("未配置 BROWSERLESS_TOKEN 环境变量");
+  // 检查是否配置了 BROWSER_TOKEN 环境变量
+  if (!BROWSER_TOKEN) {
+    logger.warn("未配置 BROWSER_TOKEN 环境变量");
   } else {
-    token = `?token=${BROWSERLESS_API_TOKEN}`;
+    url.searchParams.set("token", BROWSER_TOKEN);
   }
 
-  return `http://${browserlessHost}:${BROWSERLESS_PORT}/${extraPath}${token}`;
+  return url.toString();
 };
 
-// 请求 browserless 压力接口，并设置指标数值
-async function getWorkerPressure(browserlessEntry) {
+// 请求 browser 压力接口，并设置指标数值
+async function getWorkerPressure(browserEntry) {
   try {
-    const { data } = await axios.get(browserlessEntry);
+    const { data } = await axios.get(browserEntry);
 
     const { pressure } = data;
 
@@ -102,20 +62,21 @@ async function getWorkerPressure(browserlessEntry) {
       _.floor((pressure.running * 100) / pressure.maxConcurrent, 2)
     );
   } catch (err) {
-    logger.error("获取 pod 状态失败", { podIp: ip, err });
-    throw err;
+    logger.error("获取 pod 状态失败", { browserPressureEntry, err });
   }
 }
 
-const browserlessEntry = getBrowserlessEntry("pressure");
+const browserPressureEntry = getBrowserPressureEntry();
 
 app.get("/metrics", async function (req, res) {
-  await getWorkerPressure(browserlessEntry);
+  await getWorkerPressure(browserPressureEntry);
 
   res.set("Content-Type", prom.register.contentType);
   res.end(await prom.register.metrics());
 });
 
-app.listen(PORT || 5000, () => {
-  console.log(`Example app listening on port 3000`);
+const port = PORT || 5000;
+
+app.listen(port, () => {
+  console.log(`Example app listening on port ${port}`);
 });
