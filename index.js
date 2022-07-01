@@ -62,7 +62,8 @@ async function getWorkerPressure(browserEntry) {
       _.floor((pressure.running * 100) / pressure.maxConcurrent, 2)
     );
   } catch (err) {
-    logger.error("获取 pod 状态失败", { browserPressureEntry, err });
+    const loggerWithChild = logger.child({ browserPressureEntry, err });
+    loggerWithChild.error("获取 pod 状态失败", { browserPressureEntry, err });
   }
 }
 
