@@ -36,6 +36,21 @@ const browser_concurrent_utilization = new prom.Gauge({
   help: "浏览器并发利用率",
 });
 
+const browser_cpu = new prom.Gauge({
+  name: "browser_cpu",
+  help: "浏览器 cpu 利用率",
+});
+
+const browser_memory = new prom.Gauge({
+  name: "browser_memory",
+  help: "浏览器内存利用率",
+});
+
+const browser_recently_rejected = new prom.Gauge({
+  name: "browser_recently_rejected",
+  help: "浏览器近期拒绝数量",
+});
+
 const app = express();
 
 // 获取环境变量
@@ -76,6 +91,12 @@ async function getWorkerPressure(browserEntry) {
     browser_max_concurrent.set(pressure.maxConcurrent);
 
     browser_max_queued.set(pressure.maxQueued);
+
+    browser_cpu.set(pressure.cpu);
+
+    browser_memory.set(pressure.memory);
+
+    browser_recently_rejected.set(pressure.recentlyRejected);
 
     browser_concurrent_utilization.set(
       _.floor((pressure.running * 100) / pressure.maxConcurrent, 2)
